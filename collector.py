@@ -1,0 +1,62 @@
+# A simple script to periodically scrape comments from reddit and stash them in a couchdb.
+
+import sys
+import time
+
+from couchdb.client import Server, Database, ResourceConflict
+
+from comment import fetch_latest_comments
+
+def set_line(text):
+    '''Clear the line and output given text'''
+    sys.stdout.write('\x1b[2K\x1b[0G' + text)
+    sys.stdout.flush()
+
+def store_comments(db, new_comments):
+    comments = []
+        
+    for comment in new_comments:
+        if comment['id'] in db:
+            # Update comment data
+            new_comment = comment
+            comment = db[new_comment['id']]
+            comment.update(new_comment)
+        else:
+            comment['_id'] = comment['id']
+            
+        del comment['id'] # Remove old id key
+        comments.append(comment)
+    
+    return db.update(comments)
+
+def collect(db, seconds):
+    while True: 
+        print "Retrieved:"
+        for doc in store_comments(db, fetch_latest_comments()):
+            print doc["_id"]
+        print
+        
+        for remaining in range(seconds, 0, -1):
+            set_line("Requesting comments again in %s seconds..." % remaining)
+            time.sleep(1)
+        set_line("")
+
+def get_db(server, db_name):
+    try:
+        db = server.create(db_name)
+    except ResourceConflict:
+        db = server[db_name]
+        
+    return db
+
+def main():
+    couch_uri = 'http://localhost:5984/'
+    db_name   = 'redditron'
+    
+    server = Server(couch_uri)
+    db = get_db(server, db_name)
+    
+    collect(db, 4*60)
+
+if __name__ == '__main__':
+     main()
