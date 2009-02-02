@@ -5,7 +5,7 @@ import time
 
 from couchdb.client import Server, Database, ResourceConflict
 
-from comment import fetch_latest_comments
+from comment import fetch_latest_comments, fetch_link_comments, flatten_comments
 
 def set_line(text):
     '''Clear the line and output given text'''
@@ -29,12 +29,16 @@ def store_comments(db, new_comments):
     
     return db.update(comments)
 
-def collect(db, seconds):
-    while True: 
-        print "Retrieved:"
-        for doc in store_comments(db, fetch_latest_comments()):
-            print doc["_id"]
-        print
+def collect_comments(db, new_comments):
+    count = 0;
+    for doc in store_comments(db, new_comments):
+        count += 1;
+        
+    print "Collected %s comments." % count
+
+def poll_collect(db, seconds):
+    while True:
+        collect_comments(db, fetch_latest_comments())
         
         for remaining in range(seconds, 0, -1):
             set_line("Requesting comments again in %s seconds..." % remaining)
@@ -56,7 +60,10 @@ def main():
     server = Server(couch_uri)
     db = get_db(server, db_name)
     
-    collect(db, 4*60)
+    if (len(sys.argv) == 1):
+        poll_collect(db, 4*60)
+    else:
+        collect_comments(db, flatten_comments(fetch_link_comments(sys.argv[1])))
 
 if __name__ == '__main__':
      main()
