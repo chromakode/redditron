@@ -55,7 +55,7 @@ def get_db(server, db_name):
 
 def main():
     couch_uri = 'http://localhost:5984/'
-    db_name   = 'redditron'
+    db_name   = 'redditron-comments'
     
     server = Server(couch_uri)
     db = get_db(server, db_name)
