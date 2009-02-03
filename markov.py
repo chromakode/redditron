@@ -5,7 +5,6 @@ import random
 import bisect
 import sys
 from zlib import crc32
-from copy import copy
 
 class Chain(dict): pass
 
