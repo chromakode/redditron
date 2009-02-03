@@ -54,11 +54,15 @@ def merge_countlists(countlists):
 
     return acc
 
+START_TOKEN  = '\x02'
+END_TOKEN    = '\x03'
 token_re     = re.compile(r'\w+|[^\w\s]')
 punctuation  = re.compile(r'[,!;:.]')
 # chain =:= dict(key = dict(follower = count))
 def update_chain(chain, text, N, mhash = crc32):
     tokens = token_re.findall(text.lower())
+    tokens.insert(0, START_TOKEN)
+    tokens.append(END_TOKEN)
 
     for x in xrange(len(tokens)):
         for y in range(N):
@@ -73,10 +77,11 @@ def update_chain(chain, text, N, mhash = crc32):
 
     return chain
 
-def make_text(chain, N, length, mhash=crc32, acc=[]):
+def make_text(chain, N, maxlength=None, mhash=crc32, acc=[START_TOKEN]):
     text = list(acc)
-
-    for _x in xrange(length):
+    
+    picked = None
+    while picked != END_TOKEN and (len(text) < maxlength or maxlength is None):
         if not text:
             text = [weighted_choice(chain[random.choice(chain.keys())])]
 
