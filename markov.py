@@ -54,17 +54,11 @@ def merge_countlists(countlists):
 
     return acc
 
-split_tokens = re.compile(r'(\s+|[a-z-]+|[,!;:.])')
-whitespace   = re.compile(r'\s+|^$')
-word         = re.compile(r'[a-z\'-]')
+token_re     = re.compile(r'\w+|[^\w\s]')
 punctuation  = re.compile(r'[,!;:.]')
 # chain =:= dict(key = dict(follower = count))
 def update_chain(chain, text, N, mhash = crc32):
-    tokens = []
-    for x in split_tokens.split(text):
-        x = x.lower()
-        if x and not whitespace.match(x):
-            tokens.append(x)
+    tokens = token_re.findall(text.lower())
 
     for x in xrange(len(tokens)):
         for y in range(N):
