@@ -191,11 +191,12 @@ class Chain(dict):
             candidates = merge_countlists(weights)
             
             if candidates:            
-                picked = weighted_choice(candidates)
+                picked = Token.new(weighted_choice(candidates))
             else:
                 raise ValueError('No candidate words available.')
             
-            yield Token.new(picked)
+            if picked.token_type is not Token.SpecialToken:
+                yield picked
 
             words.append(picked)
             
