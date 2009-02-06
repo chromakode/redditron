@@ -6,19 +6,10 @@ import bisect
 import sys
 from zlib import crc32
 
-class Chain(dict): pass
-
-class token(object):
-    types = dict(punc = re.compile(r'[,!;:.]').match,
-                 word = re.compile(r'[a-z-]+').match)
-    def __init__(self,tok):
-        self.tok = tok.lower()
-
-    @property
-    def type(self):
-        for (t, fn) in self.types.iteritems():
-            if fn(self.tok):
-                return t
+START_TOKEN  = '\x02'
+END_TOKEN    = '\x03'
+token_re     = re.compile(r'\w+|[^\w\s]')
+punctuation  = re.compile(r'[,!;:.]')
 
 def weighted_choice(weight_dict):
     accum = 0
@@ -54,106 +45,70 @@ def merge_countlists(countlists):
 
     return acc
 
-START_TOKEN  = '\x02'
-END_TOKEN    = '\x03'
-token_re     = re.compile(r'\w+|[^\w\s]')
-punctuation  = re.compile(r'[,!;:.]')
 # chain =:= dict(key = dict(follower = count))
-def update_chain(chain, text, N, mhash = crc32):
-    tokens = token_re.findall(text.lower())
-    tokens.insert(0, START_TOKEN)
-    tokens.append(END_TOKEN)
-
-    for x in xrange(len(tokens)):
-        for y in range(N):
-            me = tokens[x]
-            before = tokens[x-y:x]
-            if before: # there is nothing before the beginning
-                before = mhash(''.join(tokens[x-y:x]))
-                if before in chain:
-                    chain[before][me] = chain[before].get(me, 0) + 1
-                else:
-                    chain[before] = {me: 1}
-
-    return chain
-
-def make_text(chain, N, maxlength=None, mhash=crc32, acc=[START_TOKEN]):
-    text = list(acc)
-    
-    picked = None
-    while picked != END_TOKEN and (len(text) < maxlength or maxlength is None):
-        if not text:
-            text = [weighted_choice(chain[random.choice(chain.keys())])]
-
-        if len(text) > N:
-            text = text[-N:]
-
-        seeds = [ text[x:]
-                  for x in range(-1, -min(N,len(text))-1,-1) ] # huh?
-        crcs  = [ mhash(''.join(seed))
-                  for seed in seeds ]
-        c_crcs= [ crc for crc in crcs if crc in chain ]
-        weights = [ chain[crc] for crc in c_crcs ]
-        candidates = merge_countlists(weights)
-
-        if not candidates:
-            # no candidates found for these tokens
-            text = []
-            continue
-
-        picked = weighted_choice(candidates)
-
-        yield picked
-
-        text.append(picked)
-
-def sentence_stream(stream, stdout):
-    # so now we have a bunch of tokens. We can turn them into
-    # sentences
-    last_was_punc = True
-    first         = True
-    per_line = 15
-
-    this_line = 0
-
-    for x in stream:
-        punc = punctuation.match(x)
-        if not punc:
-            stdout.write(' ')
-
-        if last_was_punc:
-            stdout.write(x[0].upper() + x[1:])
-        else:
-            stdout.write(x)
-
-        last_was_punc = punc
-
-        first = False
-
-        this_line += 1
-
-        if this_line > per_line:
-            this_line = 0
-            stdout.write('\n')
-
-
-def main(N, length, howmany = None):
-    lines = sys.stdin.readlines()
-    
-    chain = Chain()
-    for line in lines:
-        update_chain(chain, line, N)
-
-    stream = make_text(chain, N, length)
-
-    sentence_stream(stream, sys.stdout)
-
-if __name__ == '__main__':
-    main(int(sys.argv[1]) if len(sys.argv) >= 2 else 5,
-         int(sys.argv[2]) if len(sys.argv) >= 3 else 100,
-         int(sys.argv[3]) if len(sys.argv) >= 4 else None)
-
-
-    
+class Chain(dict):
+    def __init__(self, basis=None, N=2, mhash=crc32):
+        if isinstance(basis, dict):
+            self.update(basis)
         
+        self.N = N
+        self.mhash = mhash
+       
+    def train(self, text):
+        tokens = token_re.findall(text.lower())
+        tokens.insert(0, START_TOKEN)
+        tokens.append(END_TOKEN)
+
+        for x in range(len(tokens)):
+            for y in range(1, self.N+1):
+                me = tokens[x]
+                before = tokens[x-y:x]
+                if before: # there is nothing before the beginning
+                    before_hash = self.mhash(''.join(tokens[x-y:x]))
+                    if before_hash in self:
+                        self[before_hash][me] = self[before_hash].get(me, 0) + 1
+                    else:
+                        self[before_hash] = {me: 1}
+
+    def generate(self, words=[START_TOKEN], maxlength=None):
+        words = list(words)
+        
+        picked = None
+        while picked != END_TOKEN and (len(words) < maxlength or maxlength is None):
+            # Truncate previous word list to the length of the max association distance (N)
+            if len(words) > self.N:
+                words = words[-self.N:]
+                
+            # The length of the longest string of past words used for association 
+            max_seed_length = min(self.N, len(words))
+
+            weights = list()
+            for seed_length in range(1, max_seed_length+1):
+                seed_text = "".join(words[-seed_length:])
+                seed_hash = self.mhash(seed_text)
+                if seed_hash in self:
+                    weights.append(self[seed_hash])
+                    
+            candidates = merge_countlists(weights)
+            
+            if candidates:            
+                picked = weighted_choice(candidates)
+            else:
+                raise ValueError("No candidate words available.")
+            
+            yield picked
+
+            words.append(picked)
+            
+class Token(object):
+    types = dict(punc = re.compile(r'[,!;:.]').match,
+                 word = re.compile(r'[a-z-]+').match)
+    def __init__(self, tok):
+        self.tok = tok.lower()
+
+    @property
+    def type(self):
+        for (t, fn) in self.types.iteritems():
+            if fn(self.tok):
+                return t
 
