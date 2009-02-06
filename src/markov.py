@@ -80,7 +80,8 @@ class Chain(dict):
                 me = tokens[x]
                 before = tokens[x-y:x]
                 if before: # there is nothing before the beginning
-                    before_hash = self.mhash(''.join(tokens[x-y:x]))
+                    before_str = ''.join(tokens[x-y:x]).encode('utf-8')
+                    before_hash = self.mhash(before_str)
                     if before_hash in self:
                         self[before_hash][me] = self[before_hash].get(me, 0) + 1
                     else:
