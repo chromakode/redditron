@@ -6,11 +6,6 @@ import bisect
 import sys
 from zlib import crc32
 
-START_TOKEN  = '\x02'
-END_TOKEN    = '\x03'
-token_re     = re.compile(r'\w+|[^\w\s]')
-punctuation  = re.compile(r'[,!;:.]')
-
 def weighted_choice(weight_dict):
     accum = 0
     choices = []
@@ -44,6 +39,26 @@ def merge_countlists(countlists):
         acc = sum_dicts(x,acc)
 
     return acc
+    
+def has_method(instance, name):
+  return hasattr(instance, name) and callable(getattr(instance, name))
+
+START_TOKEN  = '\x02'
+END_TOKEN    = '\x03'
+SPECIAL_TOKENS = [START_TOKEN, END_TOKEN]
+
+class Token(str):
+    types = {'special':     lambda x: x in SPECIAL_TOKENS,
+             'punctuation': re.compile(r'([^\w\s%s]+)' % ''.join(SPECIAL_TOKENS)),
+             'word':        re.compile(r'(\w+)')}
+
+    @property
+    def token_name(self):
+        for (name, test) in self.types.iteritems():
+            re_matches = lambda t: has_method(t, 'match') and t.match(self)
+            call_matches = lambda t: callable(t) and t(self)
+            if re_matches(test) or call_matches(test):
+                return name
 
 # chain =:= dict(key = dict(follower = count))
 class Chain(dict):
@@ -55,7 +70,16 @@ class Chain(dict):
         self.mhash = mhash
        
     def train(self, text):
-        tokens = token_re.findall(text.lower())
+        text = text.lower()
+        
+        # Find all tokens in text
+        matches = []
+        for (name, test) in Token.types.iteritems():
+            if has_method(test, 'finditer'):
+                matches += test.finditer(text)
+        
+        start_pos = lambda m: m.start()
+        tokens = [m.group(0) for m in sorted(matches, key=start_pos)]
         tokens.insert(0, START_TOKEN)
         tokens.append(END_TOKEN)
 
@@ -84,7 +108,7 @@ class Chain(dict):
 
             weights = list()
             for seed_length in range(1, max_seed_length+1):
-                seed_text = "".join(words[-seed_length:])
+                seed_text = ''.join(words[-seed_length:])
                 seed_hash = self.mhash(seed_text)
                 if seed_hash in self:
                     weights.append(self[seed_hash])
@@ -94,21 +118,10 @@ class Chain(dict):
             if candidates:            
                 picked = weighted_choice(candidates)
             else:
-                raise ValueError("No candidate words available.")
+                raise ValueError('No candidate words available.')
             
-            yield picked
+            yield Token(picked)
 
             words.append(picked)
             
-class Token(object):
-    types = dict(punc = re.compile(r'[,!;:.]').match,
-                 word = re.compile(r'[a-z-]+').match)
-    def __init__(self, tok):
-        self.tok = tok.lower()
-
-    @property
-    def type(self):
-        for (t, fn) in self.types.iteritems():
-            if fn(self.tok):
-                return t
-
+   
