@@ -30,16 +30,16 @@ def collect_comments(db, new_comments):
     for doc in store_comments(db, new_comments):
         count += 1;
         
-    print "Collected %s comments." % count
+    print 'Collected %s comments.' % count
 
 def poll_collect(db, seconds):
     while True:
         collect_comments(db, fetch_latest_comments())
         
         for remaining in range(seconds, 0, -1):
-            set_line("Requesting comments again in %s seconds..." % remaining)
+            set_line('Requesting comments again in %s seconds...' % remaining)
             time.sleep(1)
-        set_line("")
+        set_line('')
 
 def get_db(server, db_name):
     try:
