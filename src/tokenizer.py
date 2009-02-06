@@ -2,9 +2,9 @@ import re
 
 from utils import has_method, iterate_edges
 
-class Token(str):
+class Token(unicode):
     def __new__(self, text, token_type):
-        return str.__new__(self, text)
+        return unicode.__new__(self, text)
     
     def __init__(self, value, token_type):
         self.token_type = token_type
