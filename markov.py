@@ -44,6 +44,11 @@ def merge_countlists(countlists):
 def has_method(instance, name):
   return hasattr(instance, name) and callable(getattr(instance, name))
 
+def iterate_edges(i, sentinel=None):
+    i_sentinels = itertools.chain((sentinel,), i, (sentinel,))
+    i1, i2 = itertools.tee(i_sentinels)
+    return itertools.izip(i1, itertools.islice(i2, 1, None))
+
 class TokenType:
     def is_match(cls, text): raise NotImplementedError
     def find_all(cls, text): raise NotImplementedError
@@ -96,24 +101,16 @@ class Token:
     def join(cls, tokens):
         output = list()
         
-        tokens = [None] + list(tokens) + [None]
-        for tokens in itertools.izip(tokens, tokens[1:]):
-            types = []
-            texts = []
-            for token in tokens:
-                if token:
-                    types.append(token.token_type)
-                    texts.append(str(token))
-                else:
-                    types.append(None)
-                    texts.append(None)
-
-            join_keys = (#(types[0],types[1],texts[0],texts[1]),
-                         (types[0],types[1],texts[0]),
-                         #(types[0],types[1],None,texts[1]),
-                         (types[0],types[1]),
-                         #(types[0]),
-                         #(None,types[1])
+        tokendata = ((token,token.token_type,str(token))
+                     for token in list(tokens))
+        
+        for (token1,type1,text1), (token2,type2,text2) in iterate_edges(tokendata, (None,None,None)):
+            join_keys = (#(type1,type2,text1,text2),
+                         (type1,type2,text1),
+                         #(type1,type2,None,text2),
+                         (type1,type2),
+                         #(type1),
+                         #(None,type2)
                          )
             
             sep = cls._joins[None]
@@ -123,7 +120,7 @@ class Token:
                     break
             
             output.append(sep)
-            if tokens[1]: output.append(tokens[1])
+            if text2: output.append(token2)
             
         return ''.join(output)
             
