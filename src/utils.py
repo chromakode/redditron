@@ -1,4 +1,10 @@
+import sys
 import itertools
+
+def set_line(text):
+    '''Clear the line and output given text'''
+    sys.stdout.write('\x1b[2K\x1b[0G' + text)
+    sys.stdout.flush()
 
 def has_method(instance, name):
     return hasattr(instance, name) and callable(getattr(instance, name))

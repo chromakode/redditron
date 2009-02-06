@@ -6,11 +6,7 @@ import time
 from couchdb.client import Server, Database, ResourceConflict
 
 from comment import fetch_latest_comments, fetch_link_comments, flatten_comments
-
-def set_line(text):
-    '''Clear the line and output given text'''
-    sys.stdout.write('\x1b[2K\x1b[0G' + text)
-    sys.stdout.flush()
+from utils import set_line
 
 def store_comments(db, new_comments):
     comments = []
