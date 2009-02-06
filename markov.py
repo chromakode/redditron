@@ -62,7 +62,7 @@ class Token(str):
 
 # chain =:= dict(key = dict(follower = count))
 class Chain(dict):
-    def __init__(self, basis=None, N=2, mhash=crc32):
+    def __init__(self, basis=None, N=1, mhash=crc32):
         if isinstance(basis, dict):
             self.update(basis)
         
@@ -123,5 +123,3 @@ class Chain(dict):
             yield Token(picked)
 
             words.append(picked)
-            
-   
