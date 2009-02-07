@@ -10,11 +10,13 @@ class Token(unicode):
         self.token_type = token_type
 
 class TokenType(object):
-    def __init__(self, priority=0):
+    def __init__(self, priority=0, strip=True):
         self.priority = priority
+        self.strip = strip
         
     def is_match(self, text): raise NotImplementedError
     def find_all(self, text): raise NotImplementedError
+    def strip_all(self, text): raise NotImplementedError
     
 class DummyTokenType(TokenType):
     def is_match(self, text):
@@ -23,9 +25,12 @@ class DummyTokenType(TokenType):
     def find_all(self, text):
         return []
     
+    def strip_all(self, text):
+        return text
+    
 class RegexTokenType(TokenType):
-    def __init__(self, regex, priority=0):
-        TokenType.__init__(self, priority)
+    def __init__(self, regex, priority=0, strip=True):
+        TokenType.__init__(self, priority, strip)
         self.regex = re.compile(regex)
     
     def is_match(self, text):
@@ -34,10 +39,16 @@ class RegexTokenType(TokenType):
     def find_all(self, text):
         return [(Token(m.group(0),self), m.start())
                 for m in self.regex.finditer(text)]
+        
+    def strip_all(self, text):
+        def to_spaces(match):
+            return " "*(match.end()-match.start())
+        
+        return self.regex.sub(to_spaces, text)
 
 class CharacterTokenType(RegexTokenType):
-    def __init__(self, priority=0, **characters):
-        RegexTokenType.__init__(self, '|'.join(characters.values()), priority)
+    def __init__(self, priority=0, strip=True, **characters):
+        RegexTokenType.__init__(self, '|'.join(characters.values()), priority, strip)
         self.characters = characters
         
     def __getitem__(self, key):
@@ -72,6 +83,9 @@ class Tokenizer(object):
         token_matches = []
         for token_type in self.iterate_types():
             token_matches += token_type.find_all(text)
+            
+            if token_type.strip:
+                text = token_type.strip_all(text)
         
         tokens = [m[0] for m in sorted(token_matches, key=lambda m: m[1])]
         
