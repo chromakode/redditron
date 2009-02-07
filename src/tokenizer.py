@@ -35,19 +35,13 @@ class RegexTokenType(TokenType):
         return [(Token(m.group(0),self), m.start())
                 for m in self.regex.finditer(text)]
 
-class SpecialTokenType(TokenType):
+class CharacterTokenType(RegexTokenType):
     def __init__(self, priority=0, **characters):
-        TokenType.__init__(self, priority)
+        RegexTokenType.__init__(self, '|'.join(characters.values()), priority)
         self.characters = characters
         
     def __getitem__(self, key):
         return self.characters[key]
-    
-    def is_match(self, text):
-        return text in self.characters.values()
-    
-    def find_all(self, text):
-        return []
 
 class Tokenizer(object):
     def __init__(self, types={}, joins={}):

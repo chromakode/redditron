@@ -6,7 +6,7 @@ import random
 import bisect
 from zlib import crc32
 
-from tokenizer import Tokenizer, RegexTokenType, SpecialTokenType
+from tokenizer import Tokenizer, RegexTokenType, CharacterTokenType
 
 def weighted_choice(weight_dict):
     accum = 0
@@ -42,28 +42,34 @@ def merge_countlists(countlists):
 
     return acc
 
+def simple_english_tokenizer(tokenizer=None):
+    if not tokenizer:
+        tokenizer   = Tokenizer()
+        
+    word        = tokenizer.type['Word']        = RegexTokenType(r'(\w+)')
+    punctuation = tokenizer.type['Punctuation'] = RegexTokenType(r'([^\w\s%s]+)')
 
-SPECIAL_CHARACTERS = {'start':'\x02', 'end':'\x03'}
+    tokenizer.joins = {
+        (punctuation,word,'\'')   : '',
+        (punctuation,word)        : ' ',
+        (punctuation,punctuation) : '',
+        (word,word)               : ' ',
+        None                      : ''
+    }
+    
+    return tokenizer
 
-tokenizer = Tokenizer()
-tokenizer.type['Special']     = SpecialTokenType(**SPECIAL_CHARACTERS)
-tokenizer.type['Word']        = RegexTokenType(r'(\w+)')
-tokenizer.type['Punctuation'] = RegexTokenType(r'([^\w\s%s]+)' % ''.join(SPECIAL_CHARACTERS.values()))
-
-SpecialToken     = tokenizer.type['Special'] 
-WordToken        = tokenizer.type['Word']
-PunctuationToken = tokenizer.type['Punctuation']
-
-tokenizer.joins = {
-    (PunctuationToken,WordToken,'\'')   : '',
-    (PunctuationToken,WordToken)        : ' ',
-    (PunctuationToken,PunctuationToken) : '',
-    (WordToken,WordToken)               : ' ',
-    None                                : ''         
-}
+MarkovMarkerToken = CharacterTokenType(priority=-10, start='\x02', end='\x03')
 
 class Chain(dict):
-    def __init__(self, basis=None, N=1, mhash=crc32):
+    def __init__(self, tokenizer=None, basis=None, N=1, mhash=crc32):
+        if tokenizer:
+            self.tokenizer = tokenizer
+        else:
+            self.tokenizer = simple_english_tokenizer()
+            
+        self.tokenizer.type['MarkovMarker'] = MarkovMarkerToken
+        
         if isinstance(basis, dict):
             self.update(basis)
         
@@ -71,9 +77,9 @@ class Chain(dict):
         self.mhash = mhash
        
     def train(self, text):
-        tokens = tokenizer.tokenize(text.lower())
-        tokens.insert(0, SpecialToken['start'])
-        tokens.append(SpecialToken['end'])
+        tokens = self.tokenizer.tokenize(text.lower())
+        tokens.insert(0, MarkovMarkerToken['start'])
+        tokens.append(MarkovMarkerToken['end'])
 
         for x in range(len(tokens)):
             for y in range(1, self.N+1):
@@ -87,7 +93,7 @@ class Chain(dict):
                     else:
                         self[before_hash] = {me: 1}
 
-    def generate(self, tokens=[SpecialToken['start']], N=None, maxlength=None):
+    def generate(self, tokens=[MarkovMarkerToken['start']], N=None, maxlength=None):
         tokens = list(tokens)
         
         if N:
@@ -96,7 +102,7 @@ class Chain(dict):
             N = self.N
         
         picked = None
-        while picked != SpecialToken['end'] and (len(tokens) < maxlength or maxlength is None):
+        while picked != MarkovMarkerToken['end'] and (len(tokens) < maxlength or maxlength is None):
             # Truncate previous token list to the length of the max association distance (N)
             if len(tokens) > N:
                 tokens = tokens[-N:]
@@ -114,15 +120,15 @@ class Chain(dict):
             candidates = merge_countlists(weights)
             
             if candidates:            
-                picked = tokenizer.token(weighted_choice(candidates))
+                picked = self.tokenizer.token(weighted_choice(candidates))
             else:
                 raise ValueError('No candidate tokens available.')
             
-            if picked.token_type is not SpecialToken:
+            if picked.token_type is not MarkovMarkerToken:
                 yield picked
 
             tokens.append(picked)
             
-    def generate_text(self, text=SpecialToken['start'], N=None, maxlength=None):
-        tokens = tokenizer.tokenize(text)
-        return tokenizer.join(self.generate(tokens, N, maxlength))
+    def generate_text(self, text=MarkovMarkerToken['start'], N=None, maxlength=None):
+        tokens = self.tokenizer.tokenize(text)
+        return self.tokenizer.join(self.generate(tokens, N, maxlength))
