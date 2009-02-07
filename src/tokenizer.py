@@ -86,7 +86,7 @@ class Tokenizer(object):
     def join(self, tokens):
         output = list()
         
-        tokendata = ((token,token.token_type,str(token))
+        tokendata = ((token,token.token_type,unicode(token))
                      for token in list(tokens))
         
         for (token1,type1,text1), (token2,type2,text2) in iterate_edges(tokendata,(None,None,None)):

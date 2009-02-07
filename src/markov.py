@@ -80,8 +80,8 @@ class Chain(dict):
                 me = tokens[x]
                 before = tokens[x-y:x]
                 if before: # there is nothing before the beginning
-                    before_str = ''.join(tokens[x-y:x]).encode('utf-8')
-                    before_hash = self.mhash(before_str)
+                    before_text = ''.join(tokens[x-y:x])
+                    before_hash = self.mhash(before_text.encode('utf-8'))
                     if before_hash in self:
                         self[before_hash][me] = self[before_hash].get(me, 0) + 1
                     else:
@@ -102,7 +102,7 @@ class Chain(dict):
             weights = list()
             for seed_length in range(1, max_seed_length+1):
                 seed_text = ''.join(words[-seed_length:])
-                seed_hash = self.mhash(seed_text)
+                seed_hash = self.mhash(seed_text.encode('utf-8'))
                 if seed_hash in self:
                     weights.append(self[seed_hash])
                     
