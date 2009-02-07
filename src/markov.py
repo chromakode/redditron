@@ -87,17 +87,22 @@ class Chain(dict):
                     else:
                         self[before_hash] = {me: 1}
 
-    def generate(self, words=[SpecialToken['start']], maxlength=None):
+    def generate(self, words=[SpecialToken['start']], N=None, maxlength=None):
         words = list(words)
+        
+        if N:
+            N = min(N, self.N)
+        else:
+            N = self.N
         
         picked = None
         while picked != SpecialToken['end'] and (len(words) < maxlength or maxlength is None):
             # Truncate previous word list to the length of the max association distance (N)
-            if len(words) > self.N:
-                words = words[-self.N:]
+            if len(words) > N:
+                words = words[-N:]
                 
             # The length of the longest string of past words used for association 
-            max_seed_length = min(self.N, len(words))
+            max_seed_length = min(N, len(words))
 
             weights = list()
             for seed_length in range(1, max_seed_length+1):
@@ -118,5 +123,5 @@ class Chain(dict):
 
             words.append(picked)
             
-    def generate_text(self, words=[SpecialToken['start']], maxlength=None):
-        return tokenizer.join(self.generate(words, maxlength))
+    def generate_text(self, words=[SpecialToken['start']], N=None, maxlength=None):
+        return tokenizer.join(self.generate(words, N, maxlength))
