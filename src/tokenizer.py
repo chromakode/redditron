@@ -10,6 +10,9 @@ class Token(unicode):
         self.token_type = token_type
 
 class TokenType(object):
+    def __init__(self, priority=0):
+        self.priority = priority
+        
     def is_match(self, text): raise NotImplementedError
     def find_all(self, text): raise NotImplementedError
     
@@ -21,7 +24,8 @@ class DummyTokenType(TokenType):
         return []
     
 class RegexTokenType(TokenType):
-    def __init__(self, regex):
+    def __init__(self, regex, priority=0):
+        TokenType.__init__(self, priority)
         self.regex = re.compile(regex)
     
     def is_match(self, text):
@@ -32,7 +36,8 @@ class RegexTokenType(TokenType):
                 for m in self.regex.finditer(text)]
 
 class SpecialTokenType(TokenType):
-    def __init__(self, **characters):
+    def __init__(self, priority=0, **characters):
+        TokenType.__init__(self, priority)
         self.characters = characters
         
     def __getitem__(self, key):
@@ -55,10 +60,13 @@ class Tokenizer(object):
         if name in self.type:
             return self.type[name]
     
+    def iterate_types(self):
+        return sorted(self.type.itervalues(), key=lambda t:t.priority)
+    
     def token(self, text):
         '''Convert a single token string into a Token'''
         this_token_type = self.UnknownToken
-        for token_type in self.type.itervalues():
+        for token_type in self.iterate_types():
             if token_type.is_match(text):
                 this_token_type = token_type
                 break
@@ -68,7 +76,7 @@ class Tokenizer(object):
     def tokenize(self, text):
         '''Return tokens contained in text in order'''
         token_matches = []
-        for token_type in self.type.itervalues():
+        for token_type in self.iterate_types():
             token_matches += token_type.find_all(text)
         
         tokens = [m[0] for m in sorted(token_matches, key=lambda m: m[1])]
