@@ -87,8 +87,8 @@ class Chain(dict):
                     else:
                         self[before_hash] = {me: 1}
 
-    def generate(self, words=[SpecialToken['start']], N=None, maxlength=None):
-        words = list(words)
+    def generate(self, tokens=[SpecialToken['start']], N=None, maxlength=None):
+        tokens = list(tokens)
         
         if N:
             N = min(N, self.N)
@@ -96,17 +96,17 @@ class Chain(dict):
             N = self.N
         
         picked = None
-        while picked != SpecialToken['end'] and (len(words) < maxlength or maxlength is None):
-            # Truncate previous word list to the length of the max association distance (N)
-            if len(words) > N:
-                words = words[-N:]
+        while picked != SpecialToken['end'] and (len(tokens) < maxlength or maxlength is None):
+            # Truncate previous token list to the length of the max association distance (N)
+            if len(tokens) > N:
+                tokens = tokens[-N:]
                 
-            # The length of the longest string of past words used for association 
-            max_seed_length = min(N, len(words))
+            # The length of the longest string of past tokens used for association 
+            max_seed_length = min(N, len(tokens))
 
             weights = list()
             for seed_length in range(1, max_seed_length+1):
-                seed_text = ''.join(words[-seed_length:])
+                seed_text = ''.join(tokens[-seed_length:])
                 seed_hash = self.mhash(seed_text.encode('utf-8'))
                 if seed_hash in self:
                     weights.append(self[seed_hash])
@@ -116,12 +116,13 @@ class Chain(dict):
             if candidates:            
                 picked = tokenizer.token(weighted_choice(candidates))
             else:
-                raise ValueError('No candidate words available.')
+                raise ValueError('No candidate tokens available.')
             
             if picked.token_type is not SpecialToken:
                 yield picked
 
-            words.append(picked)
+            tokens.append(picked)
             
-    def generate_text(self, words=[SpecialToken['start']], N=None, maxlength=None):
-        return tokenizer.join(self.generate(words, N, maxlength))
+    def generate_text(self, text=SpecialToken['start'], N=None, maxlength=None):
+        tokens = tokenizer.tokenize(text)
+        return tokenizer.join(self.generate(tokens, N, maxlength))
