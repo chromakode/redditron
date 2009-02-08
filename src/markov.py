@@ -3,6 +3,7 @@
 import sys
 import re
 import random
+import math
 import bisect
 from zlib import crc32
 
@@ -11,7 +12,7 @@ from tokenizer import Tokenizer, RegexTokenType, CharacterTokenType
 def weighted_choice(weight_dict):
     accum = 0
     choices = []
-    for item, weight in weight_dict.iteritems():
+    for weight in weight_dict.itervalues():
         accum += weight
         choices.append(accum)
     
@@ -42,12 +43,37 @@ def merge_countlists(countlists):
 
     return acc
 
+class ModifiedDict:
+    def __init__(self, d, func):
+        self.d = d
+        self.func = func
+        
+    def __getitem__(self, key):
+        return self.func(self.d[key])
+        
+    def __iter__(self):
+        return iter(self.d)
+    
+    def keys(self):
+        return self.d.keys()
+    
+    def iterkeys(self):
+        return self.d.iterkeys()
+    
+    def iteritems(self):
+        for k, v in self.d.iteritems():
+            yield k, self.func(v)
+        
+    def itervalues(self):
+        for v in self.d.itervalues():
+            yield self.func(v)
+
 def simple_english_tokenizer(tokenizer=None):
     if not tokenizer:
         tokenizer   = Tokenizer()
-        
-    word        = tokenizer.type['Word']        = RegexTokenType(r'(\w+)')
-    punctuation = tokenizer.type['Punctuation'] = RegexTokenType(r'([^\w\s%s]+)')
+    
+    word        = tokenizer.type['Word']        = RegexTokenType(r'(\w+\'\w+|\w+)', priority=0)
+    punctuation = tokenizer.type['Punctuation'] = RegexTokenType(r'([^\w\s%s]+)', priority=1)
 
     tokenizer.joins = {
         (punctuation,word,'\'')   : '',
@@ -62,7 +88,7 @@ def simple_english_tokenizer(tokenizer=None):
 MarkovMarkerToken = CharacterTokenType(priority=-10, start='\x02', end='\x03')
 
 class Chain(dict):
-    def __init__(self, tokenizer=None, basis=None, N=1, mhash=crc32):
+    def __init__(self, tokenizer=None, basis=None, N=1, mhash=crc32, debug=False):
         if tokenizer:
             self.tokenizer = tokenizer
         else:
@@ -75,6 +101,15 @@ class Chain(dict):
         
         self.N = N
         self.mhash = mhash
+        self.debug = debug
+        
+    def debug_msg(self, msg):
+        if self.debug:
+            print msg
+            
+    def debug_candidates(self, candidates):
+        for token, weight in sorted(candidates.iteritems(), key=lambda (t,w):w, reverse=True):
+            self.debug_msg("%s: %s" % (repr(token), weight))
        
     def train(self, text):
         tokens = self.tokenizer.tokenize(text.lower())
@@ -82,12 +117,15 @@ class Chain(dict):
         tokens.append(MarkovMarkerToken['end'])
 
         for x in range(len(tokens)):
-            for y in range(1, self.N+1):
+            for y in range(1, min(self.N, x)+1):
                 me = tokens[x]
                 before = tokens[x-y:x]
+                self.debug_msg("%d,%d: %s %s" % (x, y, before, repr(me)))
                 if before: # there is nothing before the beginning
-                    before_text = ''.join(tokens[x-y:x])
+                    before_text = ''.join(before)
                     before_hash = self.mhash(before_text.encode('utf-8'))
+                    
+                    self.debug_msg("%s -> %s" % (repr(before_text), before_hash))
                     if before_hash in self:
                         self[before_hash][me] = self[before_hash].get(me, 0) + 1
                     else:
@@ -109,20 +147,23 @@ class Chain(dict):
                 
             # The length of the longest string of past tokens used for association 
             max_seed_length = min(N, len(tokens))
-
+            
             weights = list()
             for seed_length in range(1, max_seed_length+1):
                 seed_text = ''.join(tokens[-seed_length:])
                 seed_hash = self.mhash(seed_text.encode('utf-8'))
                 if seed_hash in self:
-                    weights.append(self[seed_hash])
+                    weights.append(ModifiedDict(self[seed_hash], lambda x: seed_length*x))
                     
             candidates = merge_countlists(weights)
             
-            if candidates:            
-                picked = self.tokenizer.token(weighted_choice(candidates))
-            else:
+            if not candidates:
                 raise ValueError('No candidate tokens available.')
+                            
+            self.debug_msg(tokens)
+            self.debug_candidates(candidates)
+            
+            picked = self.tokenizer.token(weighted_choice(candidates))
             
             if picked.token_type is not MarkovMarkerToken:
                 yield picked
